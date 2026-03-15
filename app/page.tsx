@@ -2,20 +2,21 @@ export const dynamic = 'force-dynamic';
 
 import { CompanyCard } from '@/components/company-card';
 import { getFirmDashboard } from '@/lib/dashboard';
-
-const fallbackFirmId = process.env.NEXT_PUBLIC_FIRM_ID;
+import { getViewerFirmId } from '@/lib/tenant';
 
 export default async function HomePage() {
-  if (!fallbackFirmId) {
+  const firmId = getViewerFirmId();
+
+  if (!firmId) {
     return (
       <section className="rounded-lg border border-amber-300 bg-amber-50 p-6">
         <h1 className="mb-2 text-xl font-semibold">Configure your tenant context</h1>
-        <p>Set NEXT_PUBLIC_FIRM_ID in your environment to view the workspace dashboard.</p>
+        <p>Set DEFAULT_FIRM_ID (or NEXT_PUBLIC_FIRM_ID) in your environment to view the workspace dashboard.</p>
       </section>
     );
   }
 
-  const dashboard = await getFirmDashboard(fallbackFirmId);
+  const dashboard = await getFirmDashboard(firmId);
 
   return (
     <section className="space-y-4">

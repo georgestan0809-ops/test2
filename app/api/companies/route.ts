@@ -1,23 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { UserRole } from '@prisma/client';
 import { z } from 'zod';
 import { canManageCompanies } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
+import { getCurrentUser } from '@/lib/request-context';
 
 const companySchema = z.object({
-  firmId: z.string().min(1),
   legalName: z.string().min(2),
   taxId: z.string().min(2),
   billingEmail: z.string().email(),
   isVatPayer: z.boolean().default(true)
 });
 
-const parseRole = (req: NextRequest): UserRole => (req.headers.get('x-role') as UserRole) || 'CLIENT';
-
 export async function POST(req: NextRequest) {
-  const role = parseRole(req);
+  const user = await getCurrentUser(req);
 
-  if (!canManageCompanies(role)) {
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!canManageCompanies(user.role)) {
     return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
   }
 
@@ -26,6 +27,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const company = await prisma.company.create({ data: parsed.data });
+  const company = await prisma.company.create({
+    data: {
+      ...parsed.data,
+      firmId: user.firmId
+    }
+  });
+
   return NextResponse.json(company, { status: 201 });
 }
