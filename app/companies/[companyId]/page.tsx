@@ -3,10 +3,20 @@ export const dynamic = 'force-dynamic';
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { StatusChip } from '@/components/status-chip';
+import { getViewerFirmId } from '@/lib/tenant';
 
 export default async function CompanyPage({ params }: { params: { companyId: string } }) {
-  const company = await prisma.company.findUnique({
-    where: { id: params.companyId },
+  const firmId = getViewerFirmId();
+
+  if (!firmId) {
+    notFound();
+  }
+
+  const company = await prisma.company.findFirst({
+    where: {
+      id: params.companyId,
+      firmId
+    },
     include: {
       metrics: {
         orderBy: { createdAt: 'desc' },

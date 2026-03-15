@@ -1,15 +1,30 @@
 # Romanian Accountant Multi-Tenant Portal
 
-A Next.js + TypeScript + Prisma + Postgres starter for Romanian accounting firms managing multiple client companies.
+A Next.js + TypeScript + Prisma + Postgres workspace for accounting firms managing multiple client companies.
 
-## Core features
+## Production-readiness status
 
-- Firm workspace that isolates tenant data by `firmId`.
-- Multiple client companies per accounting firm.
-- Client status dashboard: invoices, collections, e-Factura checks, SAF-T prep, and tax deadlines.
-- Internal notes and assignment tracking.
-- Reminder scheduler backed by Postgres jobs (`pg-boss`).
-- Role-based permissions for API writes.
+### Implemented
+
+- Tenant isolation at API and DB levels:
+  - API writes derive tenant from authenticated `x-user-id` instead of trusting payload.
+  - Prisma schema enforces same-tenant links for notes, assignments, and reminders using composite relations (`[entityId, firmId]`).
+- Role-based access checks for mutation routes.
+- Background reminder queue with a worker that processes unsent reminders and marks them delivered.
+- Initial migration checked into `prisma/migrations`.
+- Seed data for **two firms** to validate multi-tenant behavior and demo dashboards.
+
+### Mocked (intentional placeholders)
+
+- Reminder delivery channels (`EMAIL`, `WHATSAPP`) currently log `[MOCK DELIVERY]` in `dispatchReminder`.
+- Authentication is header-based (`x-user-id`) for local/demo usage; no real auth provider is wired yet.
+
+### Still needed for full production hardening
+
+- Replace mock notification delivery with real provider adapters (SES/Mailgun/Twilio/WhatsApp API).
+- Integrate real authentication (JWT/session provider) and remove direct header trust.
+- Add rate limiting and request audit logs for API endpoints.
+- Add automated test suite (unit/integration/e2e) and CI checks.
 
 ## Stack
 
@@ -20,31 +35,52 @@ A Next.js + TypeScript + Prisma + Postgres starter for Romanian accounting firms
 - Tailwind CSS
 - Background jobs with pg-boss
 
-## Quick start
+## Environment variables
 
-1. Copy environment file:
+Create `.env` from `.env.example`:
 
 ```bash
 cp .env.example .env
 ```
 
-2. Install deps and generate Prisma client:
+Required values:
+
+- `DATABASE_URL`: Postgres connection string used by Prisma + pg-boss.
+- `DEFAULT_FIRM_ID`: optional tenant used by server-rendered pages when no `x-firm-id` header exists.
+- `PG_BOSS_SCHEMA`: optional pg-boss schema, defaults to `public`.
+
+## Setup
+
+1. Install dependencies:
 
 ```bash
 npm install
+```
+
+2. Generate Prisma client:
+
+```bash
 npm run prisma:generate
 ```
 
-3. Apply migrations (or use `prisma db push`) and seed:
+3. Run migrations:
 
 ```bash
-npx prisma db push
+npm run prisma:migrate
+```
+
+4. Seed demo data:
+
+```bash
 npm run prisma:seed
 ```
 
-4. Put seeded `firmId` in `.env` as `NEXT_PUBLIC_FIRM_ID`.
+Seed output prints values to copy into `.env`/API calls:
 
-5. Run app + worker:
+- `DEFAULT_FIRM_ID`
+- `DEMO_MANAGER_USER_ID`
+
+5. Start app + worker in separate terminals:
 
 ```bash
 npm run dev
@@ -53,8 +89,15 @@ npm run worker
 
 ## API endpoints
 
-- `POST /api/companies` (roles: MANAGER+)
-- `POST /api/notes` (roles: ACCOUNTANT+)
-- `POST /api/reminders` (roles: ACCOUNTANT+, also enqueues job)
+All write endpoints require header `x-user-id` for the acting user.
 
-Pass caller role in header `x-role` for now.
+- `POST /api/companies` (roles: `MANAGER` and above)
+- `POST /api/notes` (roles: `ACCOUNTANT` and above)
+- `POST /api/reminders` (roles: `ACCOUNTANT` and above; enqueues `send-reminder` background job)
+
+Example headers for local testing:
+
+```text
+x-user-id: <DEMO_MANAGER_USER_ID>
+x-firm-id: <DEFAULT_FIRM_ID>  # optional for pages, not required for writes
+```
